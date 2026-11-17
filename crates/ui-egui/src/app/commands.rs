@@ -832,7 +832,7 @@ impl WordApp {
                 ));
             }
             "ui.discord" => {
-                self.canvas.open_url = Some("https://discord.gg/artcraft".into());
+                self.canvas.open_url = Some("https://the-allcraft.pages.dev".into());
                 json!({})
             }
             "ui.caretAnimation" => {

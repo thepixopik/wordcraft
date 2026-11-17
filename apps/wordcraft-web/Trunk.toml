@@ -8,3 +8,8 @@ filehash = true
 [serve]
 addresses = ["127.0.0.1"]
 port = 8771
+
+[[hooks]]
+stage = "post_build"
+command = "python3"
+command_arguments = ["pack_wasm.py"]
