@@ -1,0 +1,77 @@
+name: Build WordCraft Web Bundle
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/build-web.yml"
+      - "crates/**"
+      - "apps/wordcraft-web/**"
+      - "assets/**"
+      - "packaging/web/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wordcraft-web-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-web:
+    name: Build Wasm Bundle & Notify Hub
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust stable with wasm32 target
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Cache Rust & Workspace Crates
+        uses: Swatinem/rust-cache@v2
+        with:
+          cache-all-crates: true
+          cache-workspace-crates: true
+          cache-on-failure: true
+
+      - name: Install Trunk (prebuilt binary)
+        run: |
+          curl -fsSL https://github.com/trunk-rs/trunk/releases/latest/download/trunk-x86_64-unknown-linux-gnu.tar.gz \
+            | tar -xzf - -C "$HOME/.cargo/bin"
+
+      - name: Build & Package WordCraft Web (6 MiB parallel chunks)
+        run: |
+          bash packaging/web/package.sh
+          mkdir -p dist/word
+          cp -R dist/wordcraft-web-*/* dist/word/
+          ls -lh dist/word
+
+      - name: Upload WordCraft Web Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: the-allcraft-word-web
+          path: dist/word
+          retention-days: 90
+
+      - name: Trigger AllCraft Studio Hub Deploy
+        if: success()
+        env:
+          STUDIO_PAT: ${{ secrets.STUDIO_PAT }}
+        run: |
+          if [ -z "$STUDIO_PAT" ]; then
+            echo "::warning::STUDIO_PAT secret not set in wordcraft; skipping Hub auto-trigger."
+            exit 0
+          fi
+          curl -fsSL -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer $STUDIO_PAT" \
+            https://api.github.com/repos/thepixopik/allcraft/dispatches \
+            -d '{"event_type":"app-updated","client_payload":{"repo":"thepixopik/wordcraft"}}'
